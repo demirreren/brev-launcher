@@ -2,7 +2,7 @@ name: stable-diffusion-demo
 description: stable-diffusion-demo - deployed via Brev Launchables
 source:
   type: git
-  url: https://github.com/brevdev/brev-launcher
+  url: https://github.com/demirreren/brev-launcher
   ref: main
   path: /example-stable-diffusion
 runtime:
