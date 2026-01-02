@@ -110,10 +110,10 @@ BREV_INSTANCES: List[BrevInstance] = [
     {"gpu_model": "L40S", "gpus": 4, "vram_per_gpu_gib": 48, "total_vram_gib": 192, "provider": "MASSEDCOMPUTE", "price_per_hour": 4.77, "cost_efficiency": 40.25},
     {"gpu_model": "L40S", "gpus": 8, "vram_per_gpu_gib": 48, "total_vram_gib": 384, "provider": "MASSEDCOMPUTE", "price_per_hour": 9.54, "cost_efficiency": 40.25},
     
-    # ============ A10 (12 instances) ============
+    # ============ A10 (Verified prices) ============
+    {"gpu_model": "A10", "gpus": 1, "vram_per_gpu_gib": 24, "total_vram_gib": 24, "provider": "LAMBDA-LABS", "price_per_hour": 0.90, "cost_efficiency": 26.67},
     {"gpu_model": "A10", "gpus": 1, "vram_per_gpu_gib": 24, "total_vram_gib": 24, "provider": "MASSEDCOMPUTE", "price_per_hour": 0.65, "cost_efficiency": 36.92},
     {"gpu_model": "A10", "gpus": 1, "vram_per_gpu_gib": 24, "total_vram_gib": 24, "provider": "AWS", "price_per_hour": 0.77, "cost_efficiency": 31.17},
-    {"gpu_model": "A10", "gpus": 1, "vram_per_gpu_gib": 24, "total_vram_gib": 24, "provider": "LAMBDA-LABS", "price_per_hour": 0.90, "cost_efficiency": 26.67},
     {"gpu_model": "A10", "gpus": 2, "vram_per_gpu_gib": 24, "total_vram_gib": 48, "provider": "MASSEDCOMPUTE", "price_per_hour": 1.29, "cost_efficiency": 37.21},
     {"gpu_model": "A10", "gpus": 4, "vram_per_gpu_gib": 24, "total_vram_gib": 96, "provider": "MASSEDCOMPUTE", "price_per_hour": 2.59, "cost_efficiency": 37.07},
     {"gpu_model": "A10", "gpus": 8, "vram_per_gpu_gib": 24, "total_vram_gib": 192, "provider": "MASSEDCOMPUTE", "price_per_hour": 5.18, "cost_efficiency": 37.07},
@@ -131,11 +131,21 @@ BREV_INSTANCES: List[BrevInstance] = [
     {"gpu_model": "RTX A6000", "gpus": 2, "vram_per_gpu_gib": 48, "total_vram_gib": 96, "provider": "MASSEDCOMPUTE", "price_per_hour": 1.79, "cost_efficiency": 53.63},
     {"gpu_model": "RTX A6000", "gpus": 4, "vram_per_gpu_gib": 48, "total_vram_gib": 192, "provider": "MASSEDCOMPUTE", "price_per_hour": 3.58, "cost_efficiency": 53.63},
     
-    # ============ T4 (Cost-effective entry tier) ============
-    {"gpu_model": "T4", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "AWS", "price_per_hour": 0.40, "cost_efficiency": 40.00},
-    {"gpu_model": "T4", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "GCP", "price_per_hour": 0.42, "cost_efficiency": 38.10},
-    {"gpu_model": "T4", "gpus": 2, "vram_per_gpu_gib": 16, "total_vram_gib": 32, "provider": "AWS", "price_per_hour": 0.80, "cost_efficiency": 40.00},
-    {"gpu_model": "T4", "gpus": 4, "vram_per_gpu_gib": 16, "total_vram_gib": 64, "provider": "AWS", "price_per_hour": 1.60, "cost_efficiency": 40.00},
+    # ============ A30 (Cheapest option!) ============
+    {"gpu_model": "A30", "gpus": 1, "vram_per_gpu_gib": 24, "total_vram_gib": 24, "provider": "MASSEDCOMPUTE", "price_per_hour": 0.40, "cost_efficiency": 60.00},
+    
+    # ============ A4000 (Very cost-effective) ============
+    {"gpu_model": "A4000", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "HYPERSTACK", "price_per_hour": 0.36, "cost_efficiency": 44.44},
+    {"gpu_model": "A4000", "gpus": 2, "vram_per_gpu_gib": 16, "total_vram_gib": 32, "provider": "HYPERSTACK", "price_per_hour": 0.72, "cost_efficiency": 44.44},
+    
+    # ============ T4 (Entry tier) ============
+    {"gpu_model": "T4", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "GCP", "price_per_hour": 0.49, "cost_efficiency": 32.65},
+    
+    # ============ P4 (Small VRAM) ============
+    {"gpu_model": "P4", "gpus": 1, "vram_per_gpu_gib": 8, "total_vram_gib": 8, "provider": "GCP", "price_per_hour": 0.78, "cost_efficiency": 10.26},
+    
+    # ============ M60 (Legacy, small VRAM) ============
+    {"gpu_model": "M60", "gpus": 1, "vram_per_gpu_gib": 8, "total_vram_gib": 8, "provider": "AWS", "price_per_hour": 0.90, "cost_efficiency": 8.89},
     
     # ============ V100 (Legacy but still available) ============
     {"gpu_model": "V100", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "MASSEDCOMPUTE", "price_per_hour": 0.89, "cost_efficiency": 17.98},
