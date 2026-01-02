@@ -21,7 +21,7 @@ from .constants import (
     PROJECT_TYPE_NOTEBOOK,
     PROJECT_TYPE_WEBAPP,
 )
-from .detect import detect_dependency_file, detect_entry_file, estimate_vram_usage, find_candidate_entry_files
+from .detect import detect_dependency_file, detect_entry_file, estimate_vram_usage, estimate_vram_usage_detailed, find_candidate_entry_files
 from .gitinfo import GitError
 from .launchable_schema import LaunchableConfig, SourceConfig
 from .output import (
@@ -39,6 +39,7 @@ from .output import (
     print_yaml_preview,
 )
 from .pricing import GPU_PRICING, calculate_monthly_cost, calculate_yearly_cost, recommend_gpu
+from .pricing_advanced import recommend_gpu_advanced, format_instance_name, BrevInstance
 from .project_scan import scan_project
 from .render_yaml import render_yaml, write_launchable_yaml
 
@@ -404,11 +405,19 @@ def cost_estimate(
         "-h",
         help="Expected hours of usage per day (default: 24 for always-on).",
     ),
+    advanced: bool = typer.Option(
+        False,
+        "--advanced",
+        "-a",
+        help="Show advanced analysis with 490+ instance options across multiple providers.",
+    ),
 ) -> None:
     """Estimate deployment costs and recommend optimal GPU.
     
     Analyzes your project to estimate VRAM requirements and shows
     cost comparison across different GPU options.
+    
+    Use --advanced to see detailed provider comparison across 490+ instances.
     """
     console.print()
     console.print("[bold]💰 GPU Cost Analyzer[/bold]")
@@ -428,8 +437,8 @@ def cost_estimate(
     
     current_info = GPU_PRICING.get(current_gpu, GPU_PRICING["gpu_1x_a10"])
     
-    # Estimate VRAM usage
-    estimated_vram = estimate_vram_usage(path)
+    # Estimate VRAM usage with detailed detection
+    vram_details = estimate_vram_usage_detailed(path)
     
     # Display current setup
     console.print("[bold cyan]Current Configuration:[/bold cyan]")
@@ -439,17 +448,40 @@ def cost_estimate(
     console.print(f"  Yearly: [yellow]${calculate_yearly_cost(current_info['cost_per_hour'], hours_per_day):.0f}[/yellow]")
     console.print()
     
-    if estimated_vram:
-        console.print(f"[bold cyan]Estimated VRAM Requirement:[/bold cyan] {estimated_vram:.1f}GB")
-        console.print("  (Based on detected models in your code)")
+    # Show detection details
+    if vram_details:
+        estimated_vram = vram_details["estimated_vram"]
+        console.print(f"[bold cyan]🔍 Code Analysis:[/bold cyan]")
+        
+        # Show detected models
+        if vram_details["detected_models"]:
+            console.print(f"  [green]✓[/green] Detected models:")
+            for detection in vram_details["detected_models"]:
+                console.print(f"    • {detection['model']} ({detection['vram']}GB base) in [dim]{detection['file']}[/dim]")
+        
+        # Show frameworks
+        if vram_details["frameworks"]:
+            console.print(f"  [green]✓[/green] Frameworks: {', '.join(vram_details['frameworks'])}")
+        
+        console.print()
+        console.print(f"[bold cyan]📊 VRAM Estimate:[/bold cyan]")
+        console.print(f"  Base requirement: {vram_details['base_vram']:.1f}GB")
+        console.print(f"  With 50% buffer: [bold]{estimated_vram:.1f}GB[/bold] (for gradients, activations)")
         console.print()
     else:
-        console.print("[yellow]⚠️  Could not estimate VRAM usage from code[/yellow]")
+        console.print("[yellow]⚠️  Could not detect specific models in code[/yellow]")
         console.print("  Using conservative estimate of 8GB")
         estimated_vram = 8.0
         console.print()
     
-    # Get recommendations
+    # Route to advanced or simple mode
+    if advanced:
+        _show_advanced_recommendations(
+            estimated_vram, current_info, hours_per_day, console, vram_details
+        )
+        return
+    
+    # Simple mode: Get recommendations from basic pricing
     recommendation = recommend_gpu(estimated_vram, current_gpu)
     
     # Create comparison table
@@ -532,6 +564,102 @@ def cost_estimate(
     console.print("[dim]  • Run with --hours N to estimate for N hours/day usage[/dim]")
     console.print("[dim]  • Costs shown are for continuous running[/dim]")
     console.print("[dim]  • Consider stopping instances when not in use to save costs[/dim]")
+    console.print()
+
+
+def _show_advanced_recommendations(
+    estimated_vram: float,
+    current_info: dict,
+    hours_per_day: int,
+    console: Console,
+    vram_details: Optional[dict] = None,
+) -> None:
+    """Show advanced recommendations with 490+ instance options."""
+    from .pricing_advanced import BREV_INSTANCES
+    
+    console.print("[bold magenta]🚀 Advanced Mode: Analyzing 490+ Brev instances...[/bold magenta]")
+    console.print()
+    
+    # Get advanced recommendations
+    recommendation = recommend_gpu_advanced(
+        estimated_vram,
+        current_price=current_info["cost_per_hour"],
+        max_results=10,
+    )
+    
+    if not recommendation["recommended"]:
+        console.print(f"[red]❌ {recommendation['reason']}[/red]")
+        return
+    
+    rec = recommendation["recommended"]
+    
+    # Show WHY this GPU was chosen
+    console.print("[bold green]💡 Recommendation Reasoning:[/bold green]")
+    console.print(f"  Required: [bold]{estimated_vram:.1f}GB[/bold] VRAM (with 20% safety buffer: {estimated_vram * 1.2:.1f}GB)")
+    if vram_details and vram_details["detected_models"]:
+        primary_model = max(vram_details["detected_models"], key=lambda x: x["vram"])
+        console.print(f"  Based on: [cyan]{primary_model['model']}[/cyan] ({primary_model['vram']}GB base × 1.5 buffer)")
+    console.print(f"  Cheapest fit: [bold]{format_instance_name(rec)}[/bold] with {rec['total_vram_gib']:.0f}GB total")
+    console.print()
+    
+    # Show top recommendation
+    console.print("[bold green]🏆 Best Option:[/bold green]")
+    console.print(f"  Config: [bold]{format_instance_name(rec)}[/bold]")
+    console.print(f"  VRAM: {rec['total_vram_gib']:.0f}GB total ({rec['gpus']}x {rec['vram_per_gpu_gib']:.0f}GB)")
+    console.print(f"  Cost: [green]${rec['price_per_hour']:.2f}/hour[/green]")
+    
+    monthly = calculate_monthly_cost(rec["price_per_hour"], hours_per_day)
+    yearly = calculate_yearly_cost(rec["price_per_hour"], hours_per_day)
+    console.print(f"  Monthly: [green]${monthly:.0f}[/green] ({hours_per_day}h/day)")
+    console.print(f"  Yearly: [green]${yearly:.0f}[/green]")
+    
+    if recommendation["savings"]:
+        savings = recommendation["savings"]
+        console.print(f"  💰 Savings: [bold green]${savings['monthly']:.0f}/month[/bold green] or [bold green]${savings['yearly']:.0f}/year[/bold green]")
+    
+    console.print()
+    
+    # Show alternatives table
+    if recommendation["alternatives"]:
+        table = Table(title=f"💡 Top {len(recommendation['alternatives'])} Alternatives (from {recommendation['total_options']} total options)", 
+                     show_header=True, header_style="bold magenta")
+        table.add_column("Configuration", style="cyan", width=35)
+        table.add_column("Total\nVRAM", justify="right", width=8)
+        table.add_column("$/Hour", justify="right", width=10)
+        table.add_column(f"$/Month\n({hours_per_day}h/day)", justify="right", width=12)
+        table.add_column(f"$/Year\n({hours_per_day}h/day)", justify="right", width=12)
+        table.add_column("vs Best", justify="right", width=12)
+        
+        for alt in recommendation["alternatives"]:
+            alt_monthly = calculate_monthly_cost(alt["price_per_hour"], hours_per_day)
+            alt_yearly = calculate_yearly_cost(alt["price_per_hour"], hours_per_day)
+            
+            price_diff = alt["price_per_hour"] - rec["price_per_hour"]
+            monthly_diff = calculate_monthly_cost(price_diff, hours_per_day)
+            
+            if price_diff > 0:
+                diff_str = f"[yellow]+${monthly_diff:.0f}/mo[/yellow]"
+            else:
+                diff_str = f"[green]${monthly_diff:.0f}/mo[/green]"
+            
+            table.add_row(
+                format_instance_name(alt),
+                f"{alt['total_vram_gib']:.0f}GB",
+                f"${alt['price_per_hour']:.2f}",
+                f"${alt_monthly:.0f}",
+                f"${alt_yearly:.0f}",
+                diff_str,
+            )
+        
+        console.print(table)
+        console.print()
+    
+    # Usage tips for advanced mode
+    console.print("[dim]💡 Advanced Tips:[/dim]")
+    console.print(f"[dim]  • Found {recommendation['total_options']} suitable configurations across multiple providers[/dim]")
+    console.print("[dim]  • Prices shown are from the Brev marketplace (Jan 2026)[/dim]")
+    console.print("[dim]  • Consider provider reliability and region when choosing[/dim]")
+    console.print("[dim]  • Multi-GPU configs offer better VRAM but may have overhead[/dim]")
     console.print()
 
 

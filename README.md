@@ -12,6 +12,7 @@ Generate Brev Launchable config files from your project with a single command.
 
 - **Auto-detection**: Detects project type (notebook/webapp), dependencies, and entry files
 - **Git-aware**: Extracts repository URL and normalizes it for Brev
+- **Cost optimization**: Analyzes your ML models and recommends cheapest GPU (saves $$$)
 - **Minimal prompts**: Only asks essential questions with smart defaults
 - **Stable output**: Generates reproducible YAML with consistent ordering
 - **Badge generation**: Creates ready-to-use deploy badges for your README
@@ -85,6 +86,41 @@ Runs checks for:
 - Dependency files (requirements.txt / pyproject.toml)
 - Entry files detection
 - Existing launchable.yaml
+
+### `brev-launcher cost-estimate`
+
+Analyze your project and recommend the most cost-effective GPU configuration.
+
+```bash
+# Simple mode (6 common GPUs, quick analysis)
+brev-launcher cost-estimate
+
+# Advanced mode (490+ instances across multiple providers)
+brev-launcher cost-estimate --advanced
+
+# Custom usage hours (default: 24h/day)
+brev-launcher cost-estimate --hours 8
+
+# Analyze different project
+brev-launcher cost-estimate /path/to/project
+```
+
+**What it does:**
+
+1. **Scans** your code for ML models (Stable Diffusion, LLaMA, Whisper, etc.)
+2. **Estimates** VRAM requirements based on detected models
+3. **Recommends** optimal GPU configurations
+4. **Shows** cost comparisons and potential savings
+
+**Example output:**
+```
+✅ Recommended: A10 (24GB)
+   Cost: $0.90/hour
+   Savings: $14,016/year vs current A100
+   Best for: Medium models, training
+```
+
+See [COST_OPTIMIZER_GUIDE.md](./COST_OPTIMIZER_GUIDE.md) for detailed documentation.
 
 ### `brev-launcher print-badge`
 

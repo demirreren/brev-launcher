@@ -238,38 +238,58 @@ def estimate_vram_usage(path: Path = Path.cwd()) -> Optional[float]:
     Returns:
         Estimated VRAM in GB, or None if cannot estimate.
     """
+    result = estimate_vram_usage_detailed(path)
+    return result["estimated_vram"] if result else None
+
+
+def estimate_vram_usage_detailed(path: Path = Path.cwd()) -> Optional[dict]:
+    """Estimate VRAM usage with detailed detection information.
+    
+    Args:
+        path: Project directory path.
+        
+    Returns:
+        Dictionary with:
+        - estimated_vram: float (final estimate with buffer)
+        - base_vram: float (base model requirement)
+        - detected_models: list of {model, vram, file}
+        - frameworks: list of detected frameworks
+        Or None if cannot estimate.
+    """
     # Model size patterns (model name -> estimated VRAM in GB)
     model_patterns = {
         # LLM models
-        r'gpt-?2|gpt2': 2.0,
-        r'gpt-?3\.5|gpt3': 4.0,
-        r'llama.*7b|7b.*model|7b.*llm': 14.0,
-        r'llama.*13b|13b.*model': 26.0,
-        r'llama.*70b|70b.*model': 140.0,
-        r'mistral.*7b': 14.0,
-        r'mixtral.*8x7b': 90.0,
+        r'gpt-?2|gpt2': ("GPT-2", 2.0),
+        r'gpt-?3\.5|gpt3': ("GPT-3.5", 4.0),
+        r'llama.*7b|7b.*model|7b.*llm': ("LLaMA 7B", 14.0),
+        r'llama.*13b|13b.*model': ("LLaMA 13B", 26.0),
+        r'llama.*70b|70b.*model': ("LLaMA 70B", 140.0),
+        r'mistral.*7b': ("Mistral 7B", 14.0),
+        r'mixtral.*8x7b': ("Mixtral 8x7B", 90.0),
         
         # Stable Diffusion
-        r'stable.*diffusion.*1\.5|sd.*1\.5|runwayml': 6.0,
-        r'stable.*diffusion.*xl|sdxl': 12.0,
-        r'stable.*diffusion.*2|sd.*2\.': 8.0,
+        r'stable.*diffusion.*1\.5|sd.*1\.5|runwayml': ("Stable Diffusion 1.5", 6.0),
+        r'stable.*diffusion.*xl|sdxl': ("Stable Diffusion XL", 12.0),
+        r'stable.*diffusion.*2|sd.*2\.': ("Stable Diffusion 2", 8.0),
         
         # Whisper models
-        r'whisper.*large': 10.0,
-        r'whisper.*medium': 5.0,
-        r'whisper.*small': 2.0,
-        r'whisper.*base': 1.0,
+        r'whisper.*large': ("Whisper Large", 10.0),
+        r'whisper.*medium': ("Whisper Medium", 5.0),
+        r'whisper.*small': ("Whisper Small", 2.0),
+        r'whisper.*base': ("Whisper Base", 1.0),
         
         # Other common models
-        r'bert.*large': 3.0,
-        r'bert.*base': 1.5,
-        r't5.*large': 3.0,
-        r't5.*xl': 11.0,
-        r'yolo.*v8': 2.0,
-        r'sam|segment.*anything': 6.0,
+        r'bert.*large': ("BERT Large", 3.0),
+        r'bert.*base': ("BERT Base", 1.5),
+        r't5.*large': ("T5 Large", 3.0),
+        r't5.*xl': ("T5 XL", 11.0),
+        r'yolo.*v8': ("YOLOv8", 2.0),
+        r'sam|segment.*anything': ("Segment Anything (SAM)", 6.0),
     }
     
+    detected_models = []
     max_vram = 0.0
+    frameworks = set()
     
     # Scan Python files
     for py_file in path.rglob("*.py"):
@@ -277,9 +297,26 @@ def estimate_vram_usage(path: Path = Path.cwd()) -> Optional[float]:
             continue
         try:
             content = py_file.read_text(errors='ignore').lower()
-            for pattern, vram in model_patterns.items():
+            for pattern, (model_name, vram) in model_patterns.items():
                 if re.search(pattern, content):
+                    detected_models.append({
+                        "model": model_name,
+                        "vram": vram,
+                        "file": str(py_file.relative_to(path)),
+                    })
                     max_vram = max(max_vram, vram)
+            
+            # Detect frameworks
+            if 'import torch' in content or 'from torch' in content:
+                frameworks.add('PyTorch')
+            if 'import tensorflow' in content or 'from tensorflow' in content:
+                frameworks.add('TensorFlow')
+            if 'import jax' in content or 'from jax' in content:
+                frameworks.add('JAX')
+            if 'from diffusers' in content or 'import diffusers' in content:
+                frameworks.add('Diffusers')
+            if 'import transformers' in content or 'from transformers' in content:
+                frameworks.add('Transformers')
         except Exception:
             continue
     
@@ -288,9 +325,24 @@ def estimate_vram_usage(path: Path = Path.cwd()) -> Optional[float]:
     if req_file.exists():
         try:
             content = req_file.read_text(errors='ignore').lower()
-            for pattern, vram in model_patterns.items():
+            for pattern, (model_name, vram) in model_patterns.items():
                 if re.search(pattern, content):
+                    detected_models.append({
+                        "model": model_name,
+                        "vram": vram,
+                        "file": "requirements.txt",
+                    })
                     max_vram = max(max_vram, vram)
+            
+            # Detect frameworks in requirements
+            if 'torch' in content:
+                frameworks.add('PyTorch')
+            if 'tensorflow' in content:
+                frameworks.add('TensorFlow')
+            if 'diffusers' in content:
+                frameworks.add('Diffusers')
+            if 'transformers' in content:
+                frameworks.add('Transformers')
         except Exception:
             pass
     
@@ -299,8 +351,13 @@ def estimate_vram_usage(path: Path = Path.cwd()) -> Optional[float]:
     if pyproject.exists():
         try:
             content = pyproject.read_text(errors='ignore').lower()
-            for pattern, vram in model_patterns.items():
+            for pattern, (model_name, vram) in model_patterns.items():
                 if re.search(pattern, content):
+                    detected_models.append({
+                        "model": model_name,
+                        "vram": vram,
+                        "file": "pyproject.toml",
+                    })
                     max_vram = max(max_vram, vram)
         except Exception:
             pass
@@ -317,12 +374,32 @@ def estimate_vram_usage(path: Path = Path.cwd()) -> Optional[float]:
             # If has torch/tensorflow but no specific model, estimate 4GB baseline
             if any(fw in all_content for fw in ['torch', 'tensorflow', 'jax']):
                 max_vram = 4.0
+                detected_models.append({
+                    "model": "Generic ML Framework",
+                    "vram": 4.0,
+                    "file": "requirements.txt (baseline)",
+                })
         except Exception:
             pass
     
-    # Add 50% buffer for safety (gradients, activations, etc.)
-    if max_vram > 0:
-        return round(max_vram * 1.5, 1)
+    # Return None if no models detected
+    if max_vram == 0:
+        return None
     
-    return None
+    # Add 50% buffer for safety (gradients, activations, etc.)
+    estimated_vram = round(max_vram * 1.5, 1)
+    
+    # Deduplicate detected models (keep unique by model name)
+    unique_models = {}
+    for detection in detected_models:
+        model_name = detection["model"]
+        if model_name not in unique_models or detection["vram"] > unique_models[model_name]["vram"]:
+            unique_models[model_name] = detection
+    
+    return {
+        "estimated_vram": estimated_vram,
+        "base_vram": max_vram,
+        "detected_models": list(unique_models.values()),
+        "frameworks": sorted(list(frameworks)),
+    }
 
