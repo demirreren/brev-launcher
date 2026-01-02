@@ -132,11 +132,10 @@ BREV_INSTANCES: List[BrevInstance] = [
     {"gpu_model": "RTX A6000", "gpus": 4, "vram_per_gpu_gib": 48, "total_vram_gib": 192, "provider": "MASSEDCOMPUTE", "price_per_hour": 3.58, "cost_efficiency": 53.63},
     
     # ============ T4 (Cost-effective entry tier) ============
-    {"gpu_model": "T4", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "MASSEDCOMPUTE", "price_per_hour": 0.29, "cost_efficiency": 55.17},
     {"gpu_model": "T4", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "AWS", "price_per_hour": 0.40, "cost_efficiency": 40.00},
     {"gpu_model": "T4", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "GCP", "price_per_hour": 0.42, "cost_efficiency": 38.10},
-    {"gpu_model": "T4", "gpus": 2, "vram_per_gpu_gib": 16, "total_vram_gib": 32, "provider": "MASSEDCOMPUTE", "price_per_hour": 0.59, "cost_efficiency": 54.24},
-    {"gpu_model": "T4", "gpus": 4, "vram_per_gpu_gib": 16, "total_vram_gib": 64, "provider": "MASSEDCOMPUTE", "price_per_hour": 1.18, "cost_efficiency": 54.24},
+    {"gpu_model": "T4", "gpus": 2, "vram_per_gpu_gib": 16, "total_vram_gib": 32, "provider": "AWS", "price_per_hour": 0.80, "cost_efficiency": 40.00},
+    {"gpu_model": "T4", "gpus": 4, "vram_per_gpu_gib": 16, "total_vram_gib": 64, "provider": "AWS", "price_per_hour": 1.60, "cost_efficiency": 40.00},
     
     # ============ V100 (Legacy but still available) ============
     {"gpu_model": "V100", "gpus": 1, "vram_per_gpu_gib": 16, "total_vram_gib": 16, "provider": "MASSEDCOMPUTE", "price_per_hour": 0.89, "cost_efficiency": 17.98},
