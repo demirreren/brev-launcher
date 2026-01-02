@@ -226,3 +226,103 @@ def get_gpu_memory_gb() -> Optional[float]:
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError, ValueError):
         return None
 
+
+def estimate_vram_usage(path: Path = Path.cwd()) -> Optional[float]:
+    """Estimate VRAM usage by scanning code and dependencies.
+    
+    Looks for common ML models and frameworks to estimate memory requirements.
+    
+    Args:
+        path: Project directory path.
+        
+    Returns:
+        Estimated VRAM in GB, or None if cannot estimate.
+    """
+    # Model size patterns (model name -> estimated VRAM in GB)
+    model_patterns = {
+        # LLM models
+        r'gpt-?2|gpt2': 2.0,
+        r'gpt-?3\.5|gpt3': 4.0,
+        r'llama.*7b|7b.*model|7b.*llm': 14.0,
+        r'llama.*13b|13b.*model': 26.0,
+        r'llama.*70b|70b.*model': 140.0,
+        r'mistral.*7b': 14.0,
+        r'mixtral.*8x7b': 90.0,
+        
+        # Stable Diffusion
+        r'stable.*diffusion.*1\.5|sd.*1\.5|runwayml': 6.0,
+        r'stable.*diffusion.*xl|sdxl': 12.0,
+        r'stable.*diffusion.*2|sd.*2\.': 8.0,
+        
+        # Whisper models
+        r'whisper.*large': 10.0,
+        r'whisper.*medium': 5.0,
+        r'whisper.*small': 2.0,
+        r'whisper.*base': 1.0,
+        
+        # Other common models
+        r'bert.*large': 3.0,
+        r'bert.*base': 1.5,
+        r't5.*large': 3.0,
+        r't5.*xl': 11.0,
+        r'yolo.*v8': 2.0,
+        r'sam|segment.*anything': 6.0,
+    }
+    
+    max_vram = 0.0
+    
+    # Scan Python files
+    for py_file in path.rglob("*.py"):
+        if py_file.name.startswith("."):
+            continue
+        try:
+            content = py_file.read_text(errors='ignore').lower()
+            for pattern, vram in model_patterns.items():
+                if re.search(pattern, content):
+                    max_vram = max(max_vram, vram)
+        except Exception:
+            continue
+    
+    # Scan requirements.txt
+    req_file = path / "requirements.txt"
+    if req_file.exists():
+        try:
+            content = req_file.read_text(errors='ignore').lower()
+            for pattern, vram in model_patterns.items():
+                if re.search(pattern, content):
+                    max_vram = max(max_vram, vram)
+        except Exception:
+            pass
+    
+    # Scan pyproject.toml
+    pyproject = path / "pyproject.toml"
+    if pyproject.exists():
+        try:
+            content = pyproject.read_text(errors='ignore').lower()
+            for pattern, vram in model_patterns.items():
+                if re.search(pattern, content):
+                    max_vram = max(max_vram, vram)
+        except Exception:
+            pass
+    
+    # Check for common frameworks (gives us a baseline)
+    if max_vram == 0:
+        try:
+            all_content = ""
+            if req_file.exists():
+                all_content += req_file.read_text(errors='ignore').lower()
+            if pyproject.exists():
+                all_content += pyproject.read_text(errors='ignore').lower()
+            
+            # If has torch/tensorflow but no specific model, estimate 4GB baseline
+            if any(fw in all_content for fw in ['torch', 'tensorflow', 'jax']):
+                max_vram = 4.0
+        except Exception:
+            pass
+    
+    # Add 50% buffer for safety (gradients, activations, etc.)
+    if max_vram > 0:
+        return round(max_vram * 1.5, 1)
+    
+    return None
+

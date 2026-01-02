@@ -7,6 +7,7 @@ from typing import Optional
 import typer
 from rich.console import Console
 from rich.prompt import Confirm, IntPrompt, Prompt
+from rich.table import Table
 
 from . import __version__
 from .constants import (
@@ -20,7 +21,7 @@ from .constants import (
     PROJECT_TYPE_NOTEBOOK,
     PROJECT_TYPE_WEBAPP,
 )
-from .detect import detect_dependency_file, detect_entry_file, find_candidate_entry_files
+from .detect import detect_dependency_file, detect_entry_file, estimate_vram_usage, find_candidate_entry_files
 from .gitinfo import GitError
 from .launchable_schema import LaunchableConfig, SourceConfig
 from .output import (
@@ -37,6 +38,7 @@ from .output import (
     print_warning,
     print_yaml_preview,
 )
+from .pricing import GPU_PRICING, calculate_monthly_cost, calculate_yearly_cost, recommend_gpu
 from .project_scan import scan_project
 from .render_yaml import render_yaml, write_launchable_yaml
 
@@ -384,6 +386,153 @@ def print_badge(
     console.print("[bold]🏷️  Brev Launcher - Badge Generator[/bold]")
     print_badge_snippet(launchable_id)
     raise typer.Exit(EXIT_SUCCESS)
+
+
+@app.command("cost-estimate")
+def cost_estimate(
+    path: Path = typer.Argument(
+        Path.cwd(),
+        help="Project directory path (defaults to current directory).",
+        exists=True,
+        file_okay=False,
+        dir_okay=True,
+        resolve_path=True,
+    ),
+    hours_per_day: int = typer.Option(
+        24,
+        "--hours",
+        "-h",
+        help="Expected hours of usage per day (default: 24 for always-on).",
+    ),
+) -> None:
+    """Estimate deployment costs and recommend optimal GPU.
+    
+    Analyzes your project to estimate VRAM requirements and shows
+    cost comparison across different GPU options.
+    """
+    console.print()
+    console.print("[bold]💰 GPU Cost Analyzer[/bold]")
+    console.print()
+    
+    # Try to scan project for info
+    print_info("Analyzing project...")
+    
+    try:
+        scan = scan_project(path)
+        current_gpu = scan.brev.gpu_type if scan.brev.gpu_type else "gpu_1x_a10"
+        has_git = True
+    except GitError:
+        # No git repo, use defaults
+        current_gpu = "gpu_1x_a10"
+        has_git = False
+    
+    current_info = GPU_PRICING.get(current_gpu, GPU_PRICING["gpu_1x_a10"])
+    
+    # Estimate VRAM usage
+    estimated_vram = estimate_vram_usage(path)
+    
+    # Display current setup
+    console.print("[bold cyan]Current Configuration:[/bold cyan]")
+    console.print(f"  GPU: {current_info['name']} ({current_info['vram_gb']}GB VRAM)")
+    console.print(f"  Cost: [yellow]${current_info['cost_per_hour']:.2f}/hour[/yellow]")
+    console.print(f"  Monthly: [yellow]${calculate_monthly_cost(current_info['cost_per_hour'], hours_per_day):.0f}[/yellow]")
+    console.print(f"  Yearly: [yellow]${calculate_yearly_cost(current_info['cost_per_hour'], hours_per_day):.0f}[/yellow]")
+    console.print()
+    
+    if estimated_vram:
+        console.print(f"[bold cyan]Estimated VRAM Requirement:[/bold cyan] {estimated_vram:.1f}GB")
+        console.print("  (Based on detected models in your code)")
+        console.print()
+    else:
+        console.print("[yellow]⚠️  Could not estimate VRAM usage from code[/yellow]")
+        console.print("  Using conservative estimate of 8GB")
+        estimated_vram = 8.0
+        console.print()
+    
+    # Get recommendations
+    recommendation = recommend_gpu(estimated_vram, current_gpu)
+    
+    # Create comparison table
+    table = Table(title="💡 GPU Options Comparison", show_header=True, header_style="bold magenta")
+    table.add_column("GPU", style="cyan", width=12)
+    table.add_column("VRAM", justify="right", width=8)
+    table.add_column("$/Hour", justify="right", width=10)
+    table.add_column(f"$/Month\n({hours_per_day}h/day)", justify="right", width=12)
+    table.add_column(f"$/Year\n({hours_per_day}h/day)", justify="right", width=12)
+    table.add_column("vs Current", justify="right", width=15)
+    table.add_column("Status", width=10)
+    
+    for gpu_id, info in sorted(GPU_PRICING.items(), key=lambda x: x[1]["cost_per_hour"]):
+        if gpu_id == "any":
+            continue
+        
+        monthly = calculate_monthly_cost(info["cost_per_hour"], hours_per_day)
+        yearly = calculate_yearly_cost(info["cost_per_hour"], hours_per_day)
+        
+        current_monthly = calculate_monthly_cost(current_info["cost_per_hour"], hours_per_day)
+        savings_monthly = current_monthly - monthly
+        
+        # Determine if GPU fits requirements
+        fits = info["vram_gb"] >= estimated_vram * 0.9  # 10% tolerance
+        
+        # Status indicators
+        if gpu_id == current_gpu:
+            status = "🔵 Current"
+        elif not fits:
+            status = "❌ Too small"
+        elif savings_monthly > 0:
+            status = "✅ Cheaper"
+        elif savings_monthly < 0:
+            status = "⚠️ Pricier"
+        else:
+            status = "➖ Same"
+        
+        # Savings column
+        if gpu_id == current_gpu:
+            savings_str = "—"
+        elif savings_monthly > 0:
+            savings_str = f"[green]+${savings_monthly:.0f}/mo[/green]"
+        elif savings_monthly < 0:
+            savings_str = f"[red]-${abs(savings_monthly):.0f}/mo[/red]"
+        else:
+            savings_str = "±$0/mo"
+        
+        table.add_row(
+            info["name"],
+            f"{info['vram_gb']}GB",
+            f"${info['cost_per_hour']:.2f}",
+            f"${monthly:.0f}",
+            f"${yearly:.0f}",
+            savings_str,
+            status,
+        )
+    
+    console.print(table)
+    console.print()
+    
+    # Show recommendation
+    if recommendation["recommended"] and recommendation["recommended"] != current_gpu:
+        rec_info = recommendation["info"]
+        savings = recommendation["savings"]
+        
+        console.print("[bold green]💡 Recommendation:[/bold green]")
+        console.print(f"  Switch to [bold]{rec_info['name']}[/bold] ({rec_info['vram_gb']}GB VRAM)")
+        console.print(f"  Savings: [green]${savings['monthly']:.0f}/month[/green] or [green]${savings['yearly']:.0f}/year[/green]")
+        console.print(f"  Best for: {rec_info['good_for']}")
+        console.print()
+    elif recommendation["recommended"] == current_gpu:
+        console.print("[bold green]✅ Current GPU is optimal for your requirements![/bold green]")
+        console.print()
+    else:
+        console.print("[yellow]⚠️  Your requirements need a larger GPU[/yellow]")
+        console.print()
+    
+    # Usage tips
+    console.print("[dim]💡 Tips:[/dim]")
+    console.print("[dim]  • Run with --hours N to estimate for N hours/day usage[/dim]")
+    console.print("[dim]  • Costs shown are for continuous running[/dim]")
+    console.print("[dim]  • Consider stopping instances when not in use to save costs[/dim]")
+    console.print()
 
 
 if __name__ == "__main__":
