@@ -128,3 +128,10 @@ class LaunchableConfig(BaseModel):
         self.runtime.setup.install = command
         return self
 
+    def with_gpu(self, gpu_type: str, note: Optional[str] = None) -> "LaunchableConfig":
+        """Set the GPU type and optional note."""
+        self.compute.gpu = gpu_type
+        if note:
+            self.compute.note = note
+        return self
+

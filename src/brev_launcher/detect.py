@@ -1,6 +1,7 @@
 """Detection logic for project type and entry files."""
 
 import re
+import subprocess
 from pathlib import Path
 from typing import Optional
 
@@ -160,4 +161,68 @@ def infer_project_type(path: Path = Path.cwd()) -> str:
 
     # Default to notebook
     return "notebook"
+
+
+def detect_current_gpu() -> str:
+    """Detect GPU type from nvidia-smi on current machine.
+    
+    Returns:
+        Brev GPU type string (e.g., 'gpu_1x_a10') or 'any' if not detected.
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=name", "--format=csv,noheader"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        
+        if result.returncode != 0:
+            return "any"
+        
+        gpu_name = result.stdout.strip().lower()
+        
+        # Map GPU names to Brev GPU types
+        if "a10" in gpu_name:
+            return "gpu_1x_a10"
+        elif "a100" in gpu_name:
+            if "80gb" in gpu_name:
+                return "gpu_1x_a100_80gb"
+            return "gpu_1x_a100"
+        elif "t4" in gpu_name:
+            return "gpu_1x_t4"
+        elif "v100" in gpu_name:
+            return "gpu_1x_v100"
+        elif "h100" in gpu_name:
+            return "gpu_1x_h100"
+        else:
+            return "any"
+            
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
+        return "any"
+
+
+def get_gpu_memory_gb() -> Optional[float]:
+    """Get GPU memory in GB from nvidia-smi.
+    
+    Returns:
+        GPU memory in GB, or None if not available.
+    """
+    try:
+        result = subprocess.run(
+            ["nvidia-smi", "--query-gpu=memory.total", "--format=csv,noheader,nounits"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+        
+        if result.returncode != 0:
+            return None
+        
+        # Memory is returned in MiB, convert to GB
+        memory_mib = float(result.stdout.strip())
+        return round(memory_mib / 1024, 1)
+        
+    except (subprocess.TimeoutExpired, FileNotFoundError, OSError, ValueError):
+        return None
 

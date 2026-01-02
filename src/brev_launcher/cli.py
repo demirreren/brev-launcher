@@ -116,12 +116,60 @@ def init(
 
     try:
         scan = scan_project(path)
+        has_git = True
     except GitError as e:
-        print_validation_error(str(e))
-        raise typer.Exit(EXIT_VALIDATION_FAILURE)
-
-    print_success(f"Git repository: {scan.git.normalized_url}")
-    print_success(f"Default branch: {scan.git.default_branch}")
+        has_git = False
+        if non_interactive:
+            print_validation_error(str(e))
+            raise typer.Exit(EXIT_VALIDATION_FAILURE)
+        
+        # Ask user if they want to continue anyway (for testing in Brev)
+        console.print()
+        print_warning(str(e))
+        console.print()
+        
+        if not Confirm.ask(
+            "Continue anyway? (You'll need to manually add git info to the YAML)",
+            default=False,
+        ):
+            raise typer.Exit(EXIT_VALIDATION_FAILURE)
+        
+        # Create a minimal scan without git
+        from .project_scan import ProjectScan, check_brev_cli
+        from .detect import (
+            detect_dependency_file,
+            detect_entry_file,
+            infer_project_type,
+            get_install_command,
+        )
+        
+        dependency_file = detect_dependency_file(path)
+        inferred_type = infer_project_type(path)
+        
+        # Create a dummy GitInfo
+        from .gitinfo import GitInfo
+        dummy_git = GitInfo(
+            origin_url="https://github.com/YOUR_USERNAME/YOUR_REPO",
+            normalized_url="https://github.com/YOUR_USERNAME/YOUR_REPO",
+            default_branch="main",
+            repo_name=path.name,
+        )
+        
+        scan = ProjectScan(
+            path=path,
+            git=dummy_git,
+            dependency_file=dependency_file,
+            entry_file=detect_entry_file(path, inferred_type),
+            inferred_type=inferred_type,
+            install_command=get_install_command(dependency_file),
+            brev=check_brev_cli(),
+        )
+    
+    if has_git:
+        print_success(f"Git repository: {scan.git.normalized_url}")
+        print_success(f"Default branch: {scan.git.default_branch}")
+    else:
+        print_warning("Git repository: Not configured (will need manual setup)")
 
     if scan.dependency_file:
         print_success(f"Dependency file: {scan.dependency_file}")
@@ -131,8 +179,15 @@ def init(
     if scan.entry_file:
         print_success(f"Entry file detected: {scan.entry_file}")
 
+    # Show Brev/GPU detection info
     if scan.brev.available:
         print_info(f"Brev CLI available (instance: {scan.brev.instance_name or 'unknown'})")
+    
+    if scan.brev.gpu_type and scan.brev.gpu_type != "any":
+        gpu_info = f"GPU detected: {scan.brev.gpu_type}"
+        if scan.brev.gpu_memory_gb:
+            gpu_info += f" ({scan.brev.gpu_memory_gb}GB VRAM)"
+        print_success(gpu_info)
 
     # Step 1: Minimal questions
     console.print()
@@ -197,6 +252,16 @@ def init(
 
         # Set install command
         config.with_install_command(scan.install_command)
+
+        # Set GPU if detected
+        if scan.brev.gpu_type and scan.brev.gpu_type != "any":
+            gpu_note = f"Auto-detected from current instance"
+            if scan.brev.gpu_memory_gb:
+                gpu_note += f" ({scan.brev.gpu_memory_gb}GB VRAM)"
+            config.with_gpu(scan.brev.gpu_type, gpu_note)
+        else:
+            # Use default "any" with helpful note
+            config.with_gpu("any", "Select lowest-cost GPU in Brev UI")
 
         # Configure based on type
         if chosen_type == PROJECT_TYPE_NOTEBOOK:

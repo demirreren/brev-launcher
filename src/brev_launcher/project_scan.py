@@ -6,11 +6,13 @@ from pathlib import Path
 from typing import Optional
 
 from .detect import (
+    detect_current_gpu,
     detect_dependency_file,
     detect_entry_file,
     detect_env_example,
     detect_notebooks_folder,
     detect_ports_in_code,
+    get_gpu_memory_gb,
     get_install_command,
     infer_project_type,
 )
@@ -19,10 +21,13 @@ from .gitinfo import GitInfo, get_git_info
 
 @dataclass
 class BrevInfo:
-    """Information from Brev CLI."""
+    """Information from Brev CLI and environment."""
 
     available: bool = False
     instance_name: Optional[str] = None
+    gpu_type: Optional[str] = None
+    gpu_memory_gb: Optional[float] = None
+    status: Optional[str] = None
 
 
 @dataclass
@@ -42,8 +47,15 @@ class ProjectScan:
 
 
 def check_brev_cli() -> BrevInfo:
-    """Check if Brev CLI is available and get instance info."""
+    """Check if Brev CLI is available and get instance info.
+    
+    Also detects GPU from nvidia-smi even if Brev CLI is not available.
+    """
     info = BrevInfo()
+    
+    # Always try to detect GPU from nvidia-smi
+    info.gpu_type = detect_current_gpu()
+    info.gpu_memory_gb = get_gpu_memory_gb()
 
     try:
         # Check if brev command exists
@@ -76,9 +88,12 @@ def check_brev_cli() -> BrevInfo:
                     if len(parts) >= 2:
                         # Skip markers like * and status indicators
                         for part in parts:
-                            if part not in ("*", "RUNNING", "STOPPED"):
+                            if part not in ("*", "RUNNING", "STOPPED", "CREATING"):
                                 info.instance_name = part
                                 break
+                        # Try to extract status
+                        if "RUNNING" in line.upper():
+                            info.status = "RUNNING"
                         break
 
     except (subprocess.TimeoutExpired, FileNotFoundError, OSError):
