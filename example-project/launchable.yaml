@@ -1,0 +1,29 @@
+name: example-gpu-project
+description: example-gpu-project - deployed via Brev Launchables
+source:
+  type: git
+  url: https://github.com/brevdev/example-gpu-project
+  ref: main
+  path: /
+runtime:
+  mode: vm
+  setup:
+    python_version: '3.10'
+    install: pip install -r requirements.txt
+  start:
+    notebook:
+      enable_jupyter: true
+      command: jupyter lab --ip=0.0.0.0 --port=8888 --no-browser
+      port: 8888
+compute:
+  gpu: any
+  note: Select lowest-cost GPU in Brev UI
+networking:
+  ports:
+    - 8888
+files:
+  include:
+    - .
+metadata:
+  generated_by: brev-launcher
+  generated_at: '2026-01-02T01:55:05+00:00'

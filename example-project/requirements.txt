@@ -1,0 +1,4 @@
+# Example project dependencies
+# Keep minimal - torch is optional for GPU demo
+numpy>=1.24.0
+
