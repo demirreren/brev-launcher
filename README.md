@@ -164,9 +164,32 @@ For Flask, FastAPI, Gradio, Streamlit, etc.
 - Default port: 7860 (Gradio default)
 - Default command: `python app.py`
 
-## Example Project
+## Example Projects
 
-See the [`example-project/`](./example-project/) directory for a complete example:
+### 🎨 Stable Diffusion Demo
+
+See [`example-stable-diffusion/`](./example-stable-diffusion/) for a production-ready GPU application:
+
+- **Text-to-image generation** with Gradio UI
+- **Auto-detects GPU** and optimizes performance
+- **Includes example prompts** and best practices
+- Perfect demo of real-world ML deployment on Brev
+
+```bash
+cd example-stable-diffusion
+brev-launcher init --non-interactive
+python app.py  # Runs locally, or deploy to Brev for instant GPU access!
+```
+
+**Why this demo is cool:**
+- Shows off GPU deployment with a visual, impressive use case
+- Demonstrates how easy it is to deploy ML models on Brev
+- Includes production-ready error handling and optimizations
+- Great for social media demos and showcasing Brev's capabilities
+
+### 📓 Basic Notebook Example
+
+See [`example-project/`](./example-project/) for a minimal notebook example:
 
 ```bash
 cd example-project

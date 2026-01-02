@@ -1,0 +1,29 @@
+name: stable-diffusion-demo
+description: stable-diffusion-demo - deployed via Brev Launchables
+source:
+  type: git
+  url: https://github.com/brevdev/brev-launcher
+  ref: main
+  path: /example-stable-diffusion
+runtime:
+  mode: vm
+  setup:
+    python_version: '3.10'
+    install: pip install -r requirements.txt
+  start:
+    webapp:
+      command: python app.py
+      port: 7860
+compute:
+  gpu: any
+  note: Recommended A10 or better (16GB+ VRAM)
+networking:
+  ports:
+    - 7860
+files:
+  include:
+    - .
+metadata:
+  generated_by: brev-launcher
+  generated_at: '2026-01-02T20:00:00+00:00'
+
